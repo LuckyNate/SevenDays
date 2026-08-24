@@ -1,0 +1,100 @@
+package com.prankdom.sevendays
+
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Bundle
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.webkit.WebViewAssetLoader
+
+class MainActivity : android.app.Activity() {
+
+    private lateinit var webView: WebView
+
+    private val allowedExternalPrefixes = listOf(
+        "https://github.com/LuckyNate/SevenDays"
+    )
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        requestNotificationPermissionIfNeeded()
+        buildWebShell()
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 7001)
+        }
+    }
+
+    private fun buildWebShell() {
+        val assetLoader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
+
+        webView = WebView(this).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            settings.setSupportMultipleWindows(false)
+            settings.javaScriptCanOpenWindowsAutomatically = false
+            settings.loadsImagesAutomatically = true
+            settings.mediaPlaybackRequiresUserGesture = true
+            settings.safeBrowsingEnabled = true
+
+            webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    request: WebResourceRequest?
+                ): WebResourceResponse? {
+                    return request?.url?.let(assetLoader::shouldInterceptRequest)
+                }
+
+                override fun shouldOverrideUrlLoading(
+                    view: WebView?,
+                    request: WebResourceRequest?
+                ): Boolean {
+                    val url = request?.url?.toString() ?: return true
+
+                    if (url.startsWith("https://appassets.androidplatform.net/assets/")) {
+                        return false
+                    }
+
+                    if (allowedExternalPrefixes.any(url::startsWith)) {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }
+
+                    return true
+                }
+
+                override fun onRenderProcessGone(
+                    view: WebView?,
+                    detail: RenderProcessGoneDetail?
+                ): Boolean {
+                    view?.destroy()
+                    recreate()
+                    return true
+                }
+            }
+        }
+
+        setContentView(webView)
+        webView.loadUrl("https://appassets.androidplatform.net/assets/index.html")
+    }
+
+    override fun onDestroy() {
+        if (::webView.isInitialized) {
+            webView.stopLoading()
+            webView.destroy()
+        }
+        super.onDestroy()
+    }
+}
