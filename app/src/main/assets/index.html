@@ -1,174 +1,19 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
-  <title>SevenDays</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Seven Days</title>
   <style>
-    @font-face{font-family:'SevenDays';src:url('fonts/SevenDays-Regular.ttf') format('truetype');font-weight:400;font-style:normal;font-display:block}
-    html,body{margin:0;min-height:100%;background:#000;color:#eee;font-family:'SevenDays',system-ui,sans-serif}
-    body{display:grid;place-items:center;padding:24px;box-sizing:border-box;overflow:hidden}
-    main{width:min(92vw,620px);text-align:center}
-    .mark{font-size:clamp(42px,12vw,78px);letter-spacing:.08em;margin:0 0 18px}
-    .count{font-variant-numeric:tabular-nums;font-size:clamp(54px,17vw,104px);letter-spacing:.04em;line-height:1}
-    .label{margin-top:12px;opacity:.48;letter-spacing:.22em;font-size:12px}
-    .hint{margin-top:36px;opacity:.45;font-size:13px}
-    .done{display:none;font-size:clamp(34px,10vw,64px);letter-spacing:.05em;line-height:1.15}
-    body.hot .mark,body.hot .count{text-shadow:0 0 18px rgba(255,255,255,.14)}
+    html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}
+    body{display:flex;align-items:center;justify-content:center}
+    #art-container{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#000;padding:5vw;box-sizing:border-box}
+    #art-container img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}
   </style>
 </head>
 <body>
-  <main>
-    <section id="running">
-      <h1 class="mark">SEVEN DAYS</h1>
-      <div id="count" class="count">07:00</div>
-      <div class="label">DEVELOPMENT RUN</div>
-      <div id="hint" class="hint">Tap anywhere to begin the seven-minute test.</div>
-    </section>
-    <section id="done" class="done">CONGRATULATIONS<br>YOU SURVIVED!</section>
-  </main>
-<script>
-(() => {
-  const TOTAL = 7 * 60 * 1000;
-  const STORAGE_KEY = 'sevendays.dev.target.v1';
-
-  class HorrorEngine {
-    constructor(){
-      this.ctx=null;this.master=null;this.compressor=null;this.droneGain=null;this.droneFilter=null;
-      this.started=false;this.visible=!document.hidden;this.remainingMs=TOTAL;this.totalMs=TOTAL;this.eventTimer=null;
-    }
-    get intensity(){
-      const ratio=Math.max(0,Math.min(1,this.remainingMs/this.totalMs));
-      const elapsed=1-ratio;
-      return Math.max(0,Math.min(1,Math.pow(elapsed,1.7)));
-    }
-    async ensureContext(){
-      if(!this.ctx){
-        const C=window.AudioContext||window.webkitAudioContext;
-        this.ctx=new C();
-        this.master=this.ctx.createGain();this.master.gain.value=.0001;
-        this.compressor=this.ctx.createDynamicsCompressor();
-        this.compressor.threshold.value=-14;this.compressor.knee.value=18;this.compressor.ratio.value=5;
-        this.compressor.attack.value=.01;this.compressor.release.value=.35;
-        this.master.connect(this.compressor).connect(this.ctx.destination);
-        this.buildDrone();
-      }
-      if(this.ctx.state==='suspended') await this.ctx.resume();
-    }
-    buildDrone(){
-      const c=this.ctx;
-      const a=c.createOscillator(),b=c.createOscillator(),w=c.createOscillator();
-      const wg=c.createGain(),g=c.createGain(),f=c.createBiquadFilter();
-      a.type='sine';b.type='triangle';w.type='sine';
-      a.frequency.value=30.5;b.frequency.value=31.2;w.frequency.value=.09;wg.gain.value=3.5;
-      g.gain.value=.0001;f.type='lowpass';f.frequency.value=105;f.Q.value=1.3;
-      w.connect(wg).connect(b.detune);a.connect(f);b.connect(f);f.connect(g).connect(this.master);
-      a.start();b.start();w.start();this.droneGain=g;this.droneFilter=f;
-    }
-    setRemaining(ms){this.remainingMs=Math.max(0,ms);this.updateBed();}
-    updateBed(){
-      if(!this.ctx||!this.droneGain)return;
-      const n=this.ctx.currentTime,i=this.intensity,active=this.started&&this.visible&&this.remainingMs>0;
-      const target=active?.004+i*.075:.0001;
-      this.droneGain.gain.cancelScheduledValues(n);
-      this.droneGain.gain.exponentialRampToValueAtTime(Math.max(.0001,target),n+.8);
-      this.droneFilter.frequency.setTargetAtTime(80+i*170,n,.4);
-    }
-    async start(){
-      await this.ensureContext();this.started=true;
-      const n=this.ctx.currentTime;this.master.gain.cancelScheduledValues(n);
-      this.master.gain.exponentialRampToValueAtTime(this.visible?.75:.0001,n+.6);
-      this.updateBed();this.scheduleNext();
-    }
-    stop(){
-      this.started=false;clearTimeout(this.eventTimer);this.eventTimer=null;
-      if(!this.ctx)return;const n=this.ctx.currentTime;
-      this.master.gain.cancelScheduledValues(n);this.master.gain.exponentialRampToValueAtTime(.0001,n+.08);this.updateBed();
-    }
-    setVisible(v){
-      this.visible=!!v;if(!this.ctx)return;const n=this.ctx.currentTime;
-      const t=this.started&&this.visible?.75:.0001;
-      this.master.gain.cancelScheduledValues(n);this.master.gain.exponentialRampToValueAtTime(t,n+(this.visible?.5:.08));
-      this.updateBed();if(this.started&&this.visible&&!this.eventTimer)this.scheduleNext();
-    }
-    scheduleNext(){
-      clearTimeout(this.eventTimer);this.eventTimer=null;
-      if(!this.started||!this.visible||this.remainingMs<=0)return;
-      const i=this.intensity;
-      const min=220+(1-i)*3900,max=750+(1-i)*8500;
-      this.eventTimer=setTimeout(()=>{this.eventTimer=null;if(this.started&&this.visible)this.randomEvent();this.scheduleNext();},min+Math.random()*(max-min));
-    }
-    randomEvent(){
-      const i=this.intensity,r=Math.random();
-      if(r<.24)this.knock(i);else if(r<.47)this.scrape(i);else if(r<.67)this.breath(i);else if(r<.84)this.buzz(i);else this.sting(i);
-    }
-    noise(seconds){
-      const c=this.ctx,len=Math.max(1,Math.floor(c.sampleRate*seconds)),buf=c.createBuffer(1,len,c.sampleRate),d=buf.getChannelData(0);
-      let last=0;for(let x=0;x<len;x++){const w=Math.random()*2-1;last=last*.84+w*.16;d[x]=last;}return buf;
-    }
-    pan(v){if(this.ctx.createStereoPanner){const p=this.ctx.createStereoPanner();p.pan.value=Math.max(-.8,Math.min(.8,v));return p;}return this.ctx.createGain();}
-    knock(i){
-      const c=this.ctx,n=c.currentTime,o=c.createOscillator(),g=c.createGain(),f=c.createBiquadFilter(),p=this.pan((Math.random()*2-1)*.7),base=45+Math.random()*50;
-      o.type=Math.random()<.5?'sine':'triangle';o.frequency.setValueAtTime(base*1.8,n);o.frequency.exponentialRampToValueAtTime(base,n+.07);
-      f.type='bandpass';f.frequency.value=base*2;f.Q.value=3.2;g.gain.setValueAtTime(.0001,n);g.gain.exponentialRampToValueAtTime(.05+i*.11,n+.006);g.gain.exponentialRampToValueAtTime(.0001,n+.28+Math.random()*.45);
-      o.connect(f).connect(g).connect(p).connect(this.master);o.start(n);o.stop(n+.9);
-    }
-    scrape(i){
-      const c=this.ctx,n=c.currentTime,d=.6+Math.random()*(1.2+i*1.6),s=c.createBufferSource(),f=c.createBiquadFilter(),g=c.createGain(),p=this.pan((Math.random()*2-1)*.8);
-      s.buffer=this.noise(d+.1);f.type='bandpass';f.Q.value=8+Math.random()*13;f.frequency.setValueAtTime(250+Math.random()*1100,n);f.frequency.exponentialRampToValueAtTime(80+Math.random()*380,n+d);
-      g.gain.setValueAtTime(.0001,n);g.gain.exponentialRampToValueAtTime(.01+i*.045,n+.1);g.gain.exponentialRampToValueAtTime(.0001,n+d);
-      s.connect(f).connect(g).connect(p).connect(this.master);s.start(n);s.stop(n+d+.05);
-    }
-    breath(i){
-      const c=this.ctx,n=c.currentTime,d=1+Math.random()*2.2,s=c.createBufferSource(),f=c.createBiquadFilter(),g=c.createGain(),l=c.createOscillator(),lg=c.createGain(),p=this.pan((Math.random()*2-1)*.85);
-      s.buffer=this.noise(d+.15);f.type='bandpass';f.frequency.value=500+Math.random()*1200;f.Q.value=.7+Math.random()*1.5;l.frequency.value=.3+Math.random()*.6;lg.gain.value=.007+i*.018;
-      g.gain.setValueAtTime(.0001,n);g.gain.exponentialRampToValueAtTime(.007+i*.03,n+d*.35);g.gain.exponentialRampToValueAtTime(.0001,n+d);
-      l.connect(lg).connect(g.gain);s.connect(f).connect(g).connect(p).connect(this.master);l.start(n);s.start(n);s.stop(n+d+.05);l.stop(n+d+.05);
-    }
-    buzz(i){
-      const c=this.ctx,n=c.currentTime,d=.18+Math.random()*(.55+i*.9),o=c.createOscillator(),m=c.createOscillator(),mg=c.createGain(),g=c.createGain(),f=c.createBiquadFilter(),p=this.pan((Math.random()*2-1)*.6);
-      o.type='sawtooth';o.frequency.value=35+Math.random()*100;m.type='square';m.frequency.value=6+Math.random()*35;mg.gain.value=10+Math.random()*40;f.type='lowpass';f.frequency.value=260+i*1100;f.Q.value=2.4;
-      g.gain.setValueAtTime(.0001,n);g.gain.exponentialRampToValueAtTime(.007+i*.035,n+.015);g.gain.exponentialRampToValueAtTime(.0001,n+d);
-      m.connect(mg).connect(o.detune);o.connect(f).connect(g).connect(p).connect(this.master);o.start(n);m.start(n);o.stop(n+d+.03);m.stop(n+d+.03);
-    }
-    sting(i){
-      const c=this.ctx,n=c.currentTime,g=c.createGain(),p=this.pan((Math.random()*2-1)*.6),base=70+Math.random()*170,d=.3+Math.random()*1.05;
-      g.gain.setValueAtTime(.0001,n);g.gain.exponentialRampToValueAtTime(.01+i*.06,n+.012);g.gain.exponentialRampToValueAtTime(.0001,n+d);g.connect(p).connect(this.master);
-      [base,base*1.4142,base*1.5107].forEach((f,k)=>{const o=c.createOscillator();o.type=k?'sine':'triangle';o.frequency.setValueAtTime(f,n);o.frequency.exponentialRampToValueAtTime(f*(.92+Math.random()*.06),n+d);o.connect(g);o.start(n);o.stop(n+d+.04);});
-    }
-  }
-
-  const engine=new HorrorEngine();
-  window.SevenDaysHorror=engine;
-  const count=document.getElementById('count'),hint=document.getElementById('hint'),running=document.getElementById('running'),done=document.getElementById('done');
-  let target=Number(localStorage.getItem(STORAGE_KEY))||0,armed=false,tickTimer=null;
-
-  function format(ms){const s=Math.max(0,Math.ceil(ms/1000)),m=Math.floor(s/60),sec=s%60;return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');}
-  function finish(){
-    clearInterval(tickTimer);tickTimer=null;engine.setRemaining(0);engine.stop();localStorage.removeItem(STORAGE_KEY);
-    running.style.display='none';done.style.display='block';document.body.classList.remove('hot');
-  }
-  function tick(){
-    if(!target)return;const rem=Math.max(0,target-Date.now());engine.setRemaining(rem);count.textContent=format(rem);
-    document.body.classList.toggle('hot',rem<TOTAL*.18);
-    if(rem<=0)finish();
-  }
-  async function begin(){
-    if(armed)return;armed=true;
-    if(!target||target<=Date.now()){target=Date.now()+TOTAL;localStorage.setItem(STORAGE_KEY,String(target));}
-    await engine.start();hint.textContent='Seven-minute development run active.';tick();tickTimer=setInterval(tick,200);
-  }
-
-  document.addEventListener('visibilitychange',()=>engine.setVisible(!document.hidden));
-  document.addEventListener('pointerdown',begin,{once:true});
-
-  if(target>Date.now()){
-    count.textContent=format(target-Date.now());
-    hint.textContent='Tap to resume audio. Timer is already running.';
-    const visualTimer=setInterval(()=>{if(armed){clearInterval(visualTimer);return;}const rem=Math.max(0,target-Date.now());count.textContent=format(rem);if(rem<=0){clearInterval(visualTimer);finish();}},200);
-  } else if(target){localStorage.removeItem(STORAGE_KEY);target=0;}
-})();
-</script>
+  <div id="art-container">
+    <img src="seven-days-logo.svg" alt="SEVEN DAYS">
+  </div>
 </body>
 </html>
