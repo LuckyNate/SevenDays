@@ -101,7 +101,7 @@ class MainActivity : android.app.Activity() {
                           opening.style.cssText='position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;text-align:center;opacity:1;transition:opacity .32s ease';
                           opening.innerHTML=`
                             <img src="seven-days-logo.svg" alt="SEVEN DAYS" style="display:block;width:min(88vw,520px);height:auto;filter:drop-shadow(0 0 22px rgba(180,0,0,.32));">
-                            <div style="margin-top:34px;font-family:${font};font-size:clamp(18px,5vw,28px);letter-spacing:.16em;color:#b30000;">TAP TO BEGIN</div>
+                            <div style="margin-top:34px;font-family:SevenDays,sans-serif;font-size:clamp(18px,5vw,28px);letter-spacing:.16em;color:#b30000;">TAP TO BEGIN</div>
                           `;
                           document.body.appendChild(opening);
 
