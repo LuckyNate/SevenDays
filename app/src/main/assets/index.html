@@ -5,80 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Seven Days</title>
   <style>
-    *{box-sizing:border-box}
-    html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}
-    body{background:#000}
-    #stage{position:fixed;inset:0;display:grid;place-items:center;background:#000;overflow:hidden}
-    .fog{position:absolute;inset:-8%;width:116%;height:116%;pointer-events:none}
-    #fog-back{z-index:1;filter:blur(12px);opacity:.72}
-    #seven-days-art{position:relative;z-index:2;display:block;width:min(92vw,760px);height:auto;max-height:90vh;object-fit:contain;filter:drop-shadow(0 0 18px rgba(160,0,0,.18))}
-    #fog-front{z-index:3;filter:blur(6px);opacity:.42}
+    *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}#stage{position:fixed;inset:0;display:grid;place-items:center;background:#000;overflow:hidden}.fog{position:absolute;inset:-8%;width:116%;height:116%;pointer-events:none}#fog-back{z-index:1;filter:blur(12px);opacity:.72}#fallback{position:absolute;z-index:2;text-align:center;color:#d00000;font:900 min(22vw,220px)/.9 sans-serif;letter-spacing:-.06em}#seven-days-art{position:relative;z-index:3;display:block;width:min(92vw,760px);height:auto;max-height:90vh;object-fit:contain;filter:drop-shadow(0 0 18px rgba(160,0,0,.18))}#fog-front{z-index:4;filter:blur(6px);opacity:.42}
   </style>
 </head>
 <body>
-  <main id="stage" aria-label="Seven Days">
-    <canvas id="fog-back" class="fog"></canvas>
-    <img id="seven-days-art" src="seven-days-logo-transparent.webp" alt="SEVEN DAYS">
-    <canvas id="fog-front" class="fog"></canvas>
-  </main>
+<main id="stage" aria-label="Seven Days">
+  <canvas id="fog-back" class="fog"></canvas>
+  <div id="fallback">SEVEN<br>DAYS</div>
+  <img id="seven-days-art" src="seven-days-logo-transparent-4.png" alt="SEVEN DAYS" onload="document.getElementById('fallback').style.display='none'" onerror="this.style.display='none'">
+  <canvas id="fog-front" class="fog"></canvas>
+</main>
 <script>
 (()=>{
-  const layers=[
-    {el:document.getElementById('fog-back'),scale:42,speedX:0.0035,speedY:0.0015,speedZ:0.0020,alpha:.18,threshold:.47},
-    {el:document.getElementById('fog-front'),scale:28,speedX:-0.0050,speedY:0.0022,speedZ:0.0030,alpha:.14,threshold:.52}
-  ];
-
-  const perm=new Uint8Array(512);
-  const p=new Uint8Array(256);
-  for(let i=0;i<256;i++)p[i]=i;
-  for(let i=255;i>0;i--){const j=(Math.random()*(i+1))|0;const t=p[i];p[i]=p[j];p[j]=t;}
-  for(let i=0;i<512;i++)perm[i]=p[i&255];
-  const fade=t=>t*t*t*(t*(t*6-15)+10);
-  const lerp=(a,b,t)=>a+(b-a)*t;
-  function grad(h,x,y,z){const k=h&15,u=k<8?x:y,v=k<4?y:(k===12||k===14?x:z);return ((k&1)?-u:u)+((k&2)?-v:v);}
-  function noise(x,y,z){
-    const X=Math.floor(x)&255,Y=Math.floor(y)&255,Z=Math.floor(z)&255;
-    x-=Math.floor(x);y-=Math.floor(y);z-=Math.floor(z);
-    const u=fade(x),v=fade(y),w=fade(z);
-    const A=perm[X]+Y,AA=perm[A]+Z,AB=perm[A+1]+Z,B=perm[X+1]+Y,BA=perm[B]+Z,BB=perm[B+1]+Z;
-    return lerp(
-      lerp(lerp(grad(perm[AA],x,y,z),grad(perm[BA],x-1,y,z),u),lerp(grad(perm[AB],x,y-1,z),grad(perm[BB],x-1,y-1,z),u),v),
-      lerp(lerp(grad(perm[AA+1],x,y,z-1),grad(perm[BA+1],x-1,y,z-1),u),lerp(grad(perm[AB+1],x,y-1,z-1),grad(perm[BB+1],x-1,y-1,z-1),u),v),w
-    );
-  }
-  function fbm(x,y,z){let n=0,a=.58,f=1,total=0;for(let o=0;o<3;o++){n+=noise(x*f,y*f,z*f)*a;total+=a;f*=2;a*=.5;}return n/total*.5+.5;}
-  function smoothstep(a,b,x){x=Math.max(0,Math.min(1,(x-a)/(b-a)));return x*x*(3-2*x);}
-
-  function size(layer){
-    const dpr=Math.min(1.5,window.devicePixelRatio||1);
-    const w=Math.max(96,Math.round(innerWidth*.28*dpr));
-    const h=Math.max(64,Math.round(innerHeight*.28*dpr));
-    if(layer.el.width!==w||layer.el.height!==h){layer.el.width=w;layer.el.height=h;layer.ctx=layer.el.getContext('2d',{alpha:true});layer.img=layer.ctx.createImageData(w,h);}
-  }
-  layers.forEach(size);
-  addEventListener('resize',()=>layers.forEach(size));
-
-  let last=0;
-  function frame(ms){
-    if(ms-last<70){requestAnimationFrame(frame);return;}
-    last=ms;
-    const t=ms*.001;
-    for(const l of layers){
-      const {width:w,height:h}=l.el,d=l.img.data;
-      const ox=t*l.speedX*l.scale,oy=t*l.speedY*l.scale,oz=t*l.speedZ*l.scale;
-      let k=0;
-      for(let y=0;y<h;y++)for(let x=0;x<w;x++){
-        const nx=x/l.scale+ox,ny=y/l.scale+oy;
-        const n=fbm(nx,ny,oz);
-        const a=smoothstep(l.threshold,Math.min(.86,l.threshold+.26),n)*l.alpha;
-        d[k++]=255;d[k++]=255;d[k++]=255;d[k++]=(a*255)|0;
-      }
-      l.ctx.putImageData(l.img,0,0);
-    }
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
+const layers=[{el:document.getElementById('fog-back'),scale:42,speedX:.0035,speedY:.0015,speedZ:.002,alpha:.18,threshold:.47},{el:document.getElementById('fog-front'),scale:28,speedX:-.005,speedY:.0022,speedZ:.003,alpha:.14,threshold:.52}];
+const perm=new Uint8Array(512),p=new Uint8Array(256);for(let i=0;i<256;i++)p[i]=i;for(let i=255;i>0;i--){const j=(Math.random()*(i+1))|0,t=p[i];p[i]=p[j];p[j]=t}for(let i=0;i<512;i++)perm[i]=p[i&255];
+const fade=t=>t*t*t*(t*(t*6-15)+10),lerp=(a,b,t)=>a+(b-a)*t;function grad(h,x,y,z){const k=h&15,u=k<8?x:y,v=k<4?y:(k===12||k===14?x:z);return((k&1)?-u:u)+((k&2)?-v:v)}function noise(x,y,z){const X=Math.floor(x)&255,Y=Math.floor(y)&255,Z=Math.floor(z)&255;x-=Math.floor(x);y-=Math.floor(y);z-=Math.floor(z);const u=fade(x),v=fade(y),w=fade(z),A=perm[X]+Y,AA=perm[A]+Z,AB=perm[A+1]+Z,B=perm[X+1]+Y,BA=perm[B]+Z,BB=perm[B+1]+Z;return lerp(lerp(lerp(grad(perm[AA],x,y,z),grad(perm[BA],x-1,y,z),u),lerp(grad(perm[AB],x,y-1,z),grad(perm[BB],x-1,y-1,z),u),v),lerp(lerp(grad(perm[AA+1],x,y,z-1),grad(perm[BA+1],x-1,y,z-1),u),lerp(grad(perm[AB+1],x,y-1,z-1),grad(perm[BB+1],x-1,y-1,z-1),u),v),w)}function fbm(x,y,z){let n=0,a=.58,f=1,total=0;for(let o=0;o<3;o++){n+=noise(x*f,y*f,z*f)*a;total+=a;f*=2;a*=.5}return n/total*.5+.5}function smoothstep(a,b,x){x=Math.max(0,Math.min(1,(x-a)/(b-a)));return x*x*(3-2*x)}function size(l){const dpr=Math.min(1.5,devicePixelRatio||1),w=Math.max(96,Math.round(innerWidth*.28*dpr)),h=Math.max(64,Math.round(innerHeight*.28*dpr));if(l.el.width!==w||l.el.height!==h){l.el.width=w;l.el.height=h;l.ctx=l.el.getContext('2d',{alpha:true});l.img=l.ctx.createImageData(w,h)}}layers.forEach(size);addEventListener('resize',()=>layers.forEach(size));let last=0;function frame(ms){if(ms-last<70){requestAnimationFrame(frame);return}last=ms;const t=ms*.001;for(const l of layers){const{width:w,height:h}=l.el,d=l.img.data,ox=t*l.speedX*l.scale,oy=t*l.speedY*l.scale,oz=t*l.speedZ*l.scale;let k=0;for(let y=0;y<h;y++)for(let x=0;x<w;x++){const n=fbm(x/l.scale+ox,y/l.scale+oy,oz),a=smoothstep(l.threshold,Math.min(.86,l.threshold+.26),n)*l.alpha;d[k++]=255;d[k++]=255;d[k++]=255;d[k++]=(a*255)|0}l.ctx.putImageData(l.img,0,0)}requestAnimationFrame(frame)}requestAnimationFrame(frame);
 })();
 </script>
-</body>
-</html>
+</body></html>
