@@ -12,6 +12,7 @@
     .mark { font-size: clamp(42px, 12vw, 78px); letter-spacing: .08em; margin: 0 0 12px; }
     .sub { opacity: .62; margin-bottom: 40px; }
     .status { border: 1px solid #333; padding: 20px; border-radius: 14px; background: #090909; }
+    .hint { margin-top: 18px; opacity: .45; font-size: 13px; }
     a { color: #ddd; }
   </style>
 </head>
@@ -20,9 +21,345 @@
     <h1 class="mark">SEVEN DAYS</h1>
     <div class="sub">Local shell online.</div>
     <div class="status">
-      The app UI is being served entirely from bundled local files.
+      Procedural horror engine installed.<br />
+      No prerecorded audio is used.
+      <div class="hint">Tap anywhere to arm audio preview.</div>
       <p><a href="https://github.com/LuckyNate/SevenDays">Project page</a></p>
     </div>
   </main>
+
+  <script>
+  (() => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const TOTAL = 7 * DAY;
+
+    class SevenDaysHorrorEngine {
+      constructor() {
+        this.ctx = null;
+        this.master = null;
+        this.compressor = null;
+        this.started = false;
+        this.visible = !document.hidden;
+        this.remainingMs = TOTAL;
+        this.totalMs = TOTAL;
+        this.eventTimer = null;
+        this.droneNodes = [];
+      }
+
+      get intensity() {
+        const ratio = Math.max(0, Math.min(1, this.remainingMs / this.totalMs));
+        const elapsed = 1 - ratio;
+        // Stay restrained for most of the week, then become much more aggressive near zero.
+        return Math.max(0, Math.min(1, Math.pow(elapsed, 2.15)));
+      }
+
+      async ensureContext() {
+        if (!this.ctx) {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+          this.master = this.ctx.createGain();
+          this.master.gain.value = 0.0001;
+
+          this.compressor = this.ctx.createDynamicsCompressor();
+          this.compressor.threshold.value = -14;
+          this.compressor.knee.value = 18;
+          this.compressor.ratio.value = 5;
+          this.compressor.attack.value = 0.01;
+          this.compressor.release.value = 0.35;
+
+          this.master.connect(this.compressor).connect(this.ctx.destination);
+          this.buildDrone();
+        }
+        if (this.ctx.state === 'suspended') await this.ctx.resume();
+      }
+
+      buildDrone() {
+        const c = this.ctx;
+        const low = c.createOscillator();
+        const low2 = c.createOscillator();
+        const wobble = c.createOscillator();
+        const wobbleDepth = c.createGain();
+        const droneGain = c.createGain();
+        const filter = c.createBiquadFilter();
+
+        low.type = 'sine';
+        low2.type = 'triangle';
+        low.frequency.value = 31;
+        low2.frequency.value = 31.6;
+        wobble.type = 'sine';
+        wobble.frequency.value = 0.11;
+        wobbleDepth.gain.value = 3.2;
+        droneGain.gain.value = 0.0001;
+        filter.type = 'lowpass';
+        filter.frequency.value = 115;
+        filter.Q.value = 1.1;
+
+        wobble.connect(wobbleDepth).connect(low2.detune);
+        low.connect(filter);
+        low2.connect(filter);
+        filter.connect(droneGain).connect(this.master);
+        low.start();
+        low2.start();
+        wobble.start();
+
+        this.droneNodes = [low, low2, wobble];
+        this.droneGain = droneGain;
+        this.droneFilter = filter;
+      }
+
+      setRemaining(remainingMs, totalMs = TOTAL) {
+        this.remainingMs = Math.max(0, Number(remainingMs) || 0);
+        this.totalMs = Math.max(1, Number(totalMs) || TOTAL);
+        this.updateBed();
+      }
+
+      updateBed() {
+        if (!this.ctx || !this.droneGain) return;
+        const now = this.ctx.currentTime;
+        const i = this.intensity;
+        const active = this.started && this.visible && this.remainingMs > 0;
+        const target = active ? 0.006 + i * 0.055 : 0.0001;
+        this.droneGain.gain.cancelScheduledValues(now);
+        this.droneGain.gain.exponentialRampToValueAtTime(Math.max(0.0001, target), now + 1.8);
+        this.droneFilter.frequency.setTargetAtTime(85 + i * 120, now, 0.7);
+      }
+
+      async start() {
+        await this.ensureContext();
+        this.started = true;
+        const now = this.ctx.currentTime;
+        this.master.gain.cancelScheduledValues(now);
+        this.master.gain.exponentialRampToValueAtTime(this.visible ? 0.7 : 0.0001, now + 1.2);
+        this.updateBed();
+        this.scheduleNext();
+      }
+
+      stop() {
+        this.started = false;
+        clearTimeout(this.eventTimer);
+        this.eventTimer = null;
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        this.master.gain.cancelScheduledValues(now);
+        this.master.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+        this.updateBed();
+      }
+
+      setVisible(visible) {
+        this.visible = !!visible;
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const target = this.started && this.visible ? 0.7 : 0.0001;
+        this.master.gain.cancelScheduledValues(now);
+        this.master.gain.exponentialRampToValueAtTime(target, now + (this.visible ? 0.9 : 0.15));
+        this.updateBed();
+        if (this.started && this.visible && !this.eventTimer) this.scheduleNext();
+      }
+
+      scheduleNext() {
+        clearTimeout(this.eventTimer);
+        this.eventTimer = null;
+        if (!this.started || !this.visible || this.remainingMs <= 0) return;
+
+        const i = this.intensity;
+        const minGap = 420 + (1 - i) * 7600;
+        const maxGap = 1300 + (1 - i) * 16000;
+        const gap = minGap + Math.random() * (maxGap - minGap);
+
+        this.eventTimer = setTimeout(() => {
+          this.eventTimer = null;
+          if (this.started && this.visible) this.randomEvent();
+          this.scheduleNext();
+        }, gap);
+      }
+
+      randomEvent() {
+        const i = this.intensity;
+        const roll = Math.random();
+        if (roll < 0.26) this.hollowKnock(i);
+        else if (roll < 0.48) this.scrape(i);
+        else if (roll < 0.68) this.breath(i);
+        else if (roll < 0.84) this.unstableBuzz(i);
+        else this.dissonantSting(i);
+      }
+
+      makeNoiseBuffer(seconds = 1) {
+        const c = this.ctx;
+        const length = Math.max(1, Math.floor(c.sampleRate * seconds));
+        const buffer = c.createBuffer(1, length, c.sampleRate);
+        const data = buffer.getChannelData(0);
+        let last = 0;
+        for (let n = 0; n < length; n++) {
+          const white = Math.random() * 2 - 1;
+          last = last * 0.82 + white * 0.18;
+          data[n] = last;
+        }
+        return buffer;
+      }
+
+      panNode(amount = 0) {
+        if (this.ctx.createStereoPanner) {
+          const p = this.ctx.createStereoPanner();
+          p.pan.value = Math.max(-0.75, Math.min(0.75, amount));
+          return p;
+        }
+        return this.ctx.createGain();
+      }
+
+      hollowKnock(i) {
+        const c = this.ctx;
+        const now = c.currentTime;
+        const osc = c.createOscillator();
+        const gain = c.createGain();
+        const filter = c.createBiquadFilter();
+        const pan = this.panNode((Math.random() * 2 - 1) * 0.65);
+        const f = 48 + Math.random() * 46;
+
+        osc.type = Math.random() < 0.5 ? 'sine' : 'triangle';
+        osc.frequency.setValueAtTime(f * 1.7, now);
+        osc.frequency.exponentialRampToValueAtTime(f, now + 0.08);
+        filter.type = 'bandpass';
+        filter.frequency.value = f * 2.1;
+        filter.Q.value = 2.8;
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.06 + i * 0.08, now + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.34 + Math.random() * 0.42);
+
+        osc.connect(filter).connect(gain).connect(pan).connect(this.master);
+        osc.start(now);
+        osc.stop(now + 0.9);
+      }
+
+      scrape(i) {
+        const c = this.ctx;
+        const now = c.currentTime;
+        const src = c.createBufferSource();
+        const filter = c.createBiquadFilter();
+        const gain = c.createGain();
+        const pan = this.panNode((Math.random() * 2 - 1) * 0.7);
+        const duration = 0.7 + Math.random() * (1.5 + i * 1.5);
+
+        src.buffer = this.makeNoiseBuffer(duration + 0.1);
+        filter.type = 'bandpass';
+        filter.Q.value = 7 + Math.random() * 12;
+        const startF = 180 + Math.random() * 900;
+        const endF = 90 + Math.random() * 420;
+        filter.frequency.setValueAtTime(startF, now);
+        filter.frequency.exponentialRampToValueAtTime(endF, now + duration);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.012 + i * 0.035, now + 0.12);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+        src.connect(filter).connect(gain).connect(pan).connect(this.master);
+        src.start(now);
+        src.stop(now + duration + 0.05);
+      }
+
+      breath(i) {
+        const c = this.ctx;
+        const now = c.currentTime;
+        const duration = 1.2 + Math.random() * 2.4;
+        const src = c.createBufferSource();
+        const filter = c.createBiquadFilter();
+        const gain = c.createGain();
+        const lfo = c.createOscillator();
+        const lfoGain = c.createGain();
+        const pan = this.panNode((Math.random() * 2 - 1) * 0.85);
+
+        src.buffer = this.makeNoiseBuffer(duration + 0.2);
+        filter.type = 'bandpass';
+        filter.frequency.value = 550 + Math.random() * 1100;
+        filter.Q.value = 0.7 + Math.random() * 1.4;
+        lfo.frequency.value = 0.35 + Math.random() * 0.55;
+        lfoGain.gain.value = 0.009 + i * 0.016;
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.008 + i * 0.025, now + duration * 0.35);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+        lfo.connect(lfoGain).connect(gain.gain);
+        src.connect(filter).connect(gain).connect(pan).connect(this.master);
+        lfo.start(now);
+        src.start(now);
+        src.stop(now + duration + 0.05);
+        lfo.stop(now + duration + 0.05);
+      }
+
+      unstableBuzz(i) {
+        const c = this.ctx;
+        const now = c.currentTime;
+        const osc = c.createOscillator();
+        const mod = c.createOscillator();
+        const modGain = c.createGain();
+        const gain = c.createGain();
+        const filter = c.createBiquadFilter();
+        const pan = this.panNode((Math.random() * 2 - 1) * 0.5);
+        const duration = 0.22 + Math.random() * (0.6 + i * 0.9);
+        const base = 38 + Math.random() * 95;
+
+        osc.type = 'sawtooth';
+        osc.frequency.value = base;
+        mod.type = 'square';
+        mod.frequency.value = 7 + Math.random() * 31;
+        modGain.gain.value = 8 + Math.random() * 35;
+        filter.type = 'lowpass';
+        filter.frequency.value = 280 + i * 900;
+        filter.Q.value = 2.2;
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.008 + i * 0.025, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+        mod.connect(modGain).connect(osc.detune);
+        osc.connect(filter).connect(gain).connect(pan).connect(this.master);
+        osc.start(now); mod.start(now);
+        osc.stop(now + duration + 0.03); mod.stop(now + duration + 0.03);
+      }
+
+      dissonantSting(i) {
+        const c = this.ctx;
+        const now = c.currentTime;
+        const gain = c.createGain();
+        const pan = this.panNode((Math.random() * 2 - 1) * 0.5);
+        const base = 72 + Math.random() * 150;
+        const freqs = [base, base * 1.4142, base * 1.5107];
+        const duration = 0.35 + Math.random() * 1.1;
+
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.012 + i * 0.048, now + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+        gain.connect(pan).connect(this.master);
+
+        freqs.forEach((f, idx) => {
+          const osc = c.createOscillator();
+          osc.type = idx === 0 ? 'triangle' : 'sine';
+          osc.frequency.setValueAtTime(f, now);
+          osc.frequency.exponentialRampToValueAtTime(f * (0.93 + Math.random() * 0.06), now + duration);
+          osc.connect(gain);
+          osc.start(now);
+          osc.stop(now + duration + 0.04);
+        });
+      }
+    }
+
+    const engine = new SevenDaysHorrorEngine();
+    window.SevenDaysHorror = engine;
+
+    document.addEventListener('visibilitychange', () => {
+      engine.setVisible(!document.hidden);
+    });
+
+    // WebAudio requires a user gesture on modern Android. The real opening sequence
+    // will naturally provide that gesture; for now any tap arms the engine.
+    let armed = false;
+    async function armPreview() {
+      if (armed) return;
+      armed = true;
+      // Preview close to zero so the procedural event palette is immediately audible.
+      engine.setRemaining(35 * 60 * 1000, TOTAL);
+      await engine.start();
+      const hint = document.querySelector('.hint');
+      if (hint) hint.textContent = 'Procedural audio armed.';
+    }
+    document.addEventListener('pointerdown', armPreview, { once: true });
+  })();
+  </script>
 </body>
 </html>
