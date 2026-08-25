@@ -18,7 +18,7 @@
 <body>
   <main id="stage" aria-label="Seven Days">
     <canvas id="fog-back" class="fog"></canvas>
-    <img id="seven-days-art" src="seven-days-logo.webp" alt="SEVEN DAYS">
+    <img id="seven-days-art" src="seven-days-logo-transparent.webp" alt="SEVEN DAYS">
     <canvas id="fog-front" class="fog"></canvas>
   </main>
 <script>
@@ -60,7 +60,7 @@
 
   let last=0;
   function frame(ms){
-    if(ms-last<70){requestAnimationFrame(frame);return;} // ~14 fps is enough for slow fog
+    if(ms-last<70){requestAnimationFrame(frame);return;}
     last=ms;
     const t=ms*.001;
     for(const l of layers){
