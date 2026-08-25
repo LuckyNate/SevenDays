@@ -17,6 +17,7 @@ import androidx.webkit.WebViewAssetLoader
 class MainActivity : android.app.Activity() {
     private lateinit var webView: WebView
     private val allowedExternalPrefixes = listOf("https://github.com/LuckyNate/SevenDays")
+    private val logoUrl = "https://appassets.androidplatform.net/assets/seven-days-logo.svg"
 
     inner class AppBridge {
         @JavascriptInterface
@@ -72,6 +73,7 @@ class MainActivity : android.app.Activity() {
                         """
                         (()=>{
                           const font = "'SevenDays', sans-serif";
+                          const logo = "${logoUrl}";
                           document.documentElement.style.fontFamily = font;
                           document.body.style.fontFamily = font;
                           document.querySelectorAll('*').forEach(el => {
@@ -81,7 +83,7 @@ class MainActivity : android.app.Activity() {
                           const mark=document.querySelector('.mark');
                           if(mark){
                             const img=document.createElement('img');
-                            img.src='seven-days-logo.svg';
+                            img.src=logo;
                             img.alt='SEVEN DAYS';
                             img.style.cssText='display:block;width:min(78vw,360px);height:auto;margin:0 auto 22px;filter:drop-shadow(0 0 16px rgba(180,0,0,.25))';
                             mark.replaceWith(img);
@@ -99,7 +101,7 @@ class MainActivity : android.app.Activity() {
                           opening.id='seven-days-opening';
                           opening.style.cssText='position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;text-align:center;opacity:1;transition:opacity .32s ease';
                           opening.innerHTML=`
-                            <img src="seven-days-logo.svg" alt="SEVEN DAYS" style="display:block;width:min(88vw,520px);height:auto;filter:drop-shadow(0 0 22px rgba(180,0,0,.32));">
+                            <img src="${logoUrl}" alt="SEVEN DAYS" style="display:block;width:min(88vw,520px);height:auto;filter:drop-shadow(0 0 22px rgba(180,0,0,.32));">
                             <div style="margin-top:34px;font-family:SevenDays,sans-serif;font-size:clamp(18px,5vw,28px);letter-spacing:.16em;color:#b30000;">TAP TO BEGIN</div>
                           `;
                           document.body.appendChild(opening);
