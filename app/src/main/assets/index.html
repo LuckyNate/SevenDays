@@ -6,7 +6,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
   <title>SevenDays</title>
   <style>
-    html,body{margin:0;min-height:100%;background:#000;color:#eee;font-family:system-ui,sans-serif}
+    @font-face{font-family:'SevenDays';src:url('fonts/SevenDays-Regular.ttf') format('truetype');font-weight:400;font-style:normal;font-display:block}
+    html,body{margin:0;min-height:100%;background:#000;color:#eee;font-family:'SevenDays',system-ui,sans-serif}
     body{display:grid;place-items:center;padding:24px;box-sizing:border-box;overflow:hidden}
     main{width:min(92vw,620px);text-align:center}
     .mark{font-size:clamp(42px,12vw,78px);letter-spacing:.08em;margin:0 0 18px}
@@ -29,7 +30,6 @@
   </main>
 <script>
 (() => {
-  // DEVELOPMENT MODE: change this single value to 7 * 24 * 60 * 60 * 1000 for release.
   const TOTAL = 7 * 60 * 1000;
   const STORAGE_KEY = 'sevendays.dev.target.v1';
 
