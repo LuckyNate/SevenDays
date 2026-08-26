@@ -26,7 +26,7 @@ class MainActivity : android.app.Activity() {
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
 
-        val fontBase64 = assets.open("fonts/SevenDays-Regular.ttf").use {
+        val fontBase64 = assets.open("fonts/SevenDays-IndividualGlyphs.ttf").use {
             Base64.encodeToString(it.readBytes(), Base64.NO_WRAP)
         }
 
