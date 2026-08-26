@@ -4,22 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Seven Days</title>
-<!-- Seven Days handbuilt title font -->
 <style>
-@font-face{font-family:'SevenDays';src:url('fonts/SevenDays-Handbuilt.ttf') format('truetype');font-style:normal;font-weight:400;font-display:block}
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}#stage{position:fixed;inset:0;display:grid;place-items:center;background:#000;overflow:hidden}.fog{position:absolute;inset:-8%;width:116%;height:116%;pointer-events:none}#fog-back{z-index:1;filter:blur(12px);opacity:.72}#title{position:relative;z-index:2;text-align:center;font-family:'SevenDays';font-weight:400;font-style:normal;font-size:min(27vw,260px);line-height:.72;letter-spacing:-.03em;color:#d00000;text-shadow:0 0 5px #900,0 0 16px rgba(190,0,0,.42);transform:rotate(-1deg);user-select:none}#title span{display:block}#fog-front{z-index:3;filter:blur(6px);opacity:.42}
+@font-face{font-family:SevenDays;src:url('fonts/SevenDays-Handbuilt.ttf') format('truetype')}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
+body{display:flex;align-items:center;justify-content:center}
+#title{position:relative;z-index:2;text-align:center;font-family:SevenDays,sans-serif;font-size:min(28vw,260px);line-height:.72;letter-spacing:-.03em;color:#c00;text-shadow:0 0 6px #900,0 0 20px rgba(190,0,0,.5);user-select:none}
+#title span{display:block}
+canvas{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}
 </style>
 </head>
 <body>
-<main id="stage" aria-label="Seven Days">
-<canvas id="fog-back" class="fog"></canvas>
+<canvas id="smoke"></canvas>
 <div id="title"><span>SEVEN</span><span>DAYS</span></div>
-<canvas id="fog-front" class="fog"></canvas>
-</main>
 <script>
-(()=>{
-const layers=[{el:document.getElementById('fog-back'),scale:42,speedX:.0035,speedY:.0015,speedZ:.009,alpha:.18,threshold:.47},{el:document.getElementById('fog-front'),scale:28,speedX:-.005,speedY:.0022,speedZ:.0135,alpha:.14,threshold:.52}];
-const perm=new Uint8Array(512),p=new Uint8Array(256);for(let i=0;i<256;i++)p[i]=i;for(let i=255;i>0;i--){const j=(Math.random()*(i+1))|0,t=p[i];p[i]=p[j];p[j]=t}for(let i=0;i<512;i++)perm[i]=p[i&255];const fade=t=>t*t*t*(t*(t*6-15)+10),lerp=(a,b,t)=>a+(b-a)*t;function grad(h,x,y,z){const k=h&15,u=k<8?x:y,v=k<4?y:(k===12||k===14?x:z);return((k&1)?-u:u)+((k&2)?-v:v)}function noise(x,y,z){const X=Math.floor(x)&255,Y=Math.floor(y)&255,Z=Math.floor(z)&255;x-=Math.floor(x);y-=Math.floor(y);z-=Math.floor(z);const u=fade(x),v=fade(y),w=fade(z),A=perm[X]+Y,AA=perm[A]+Z,AB=perm[A+1]+Z,B=perm[X+1]+Y,BA=perm[B]+Z,BB=perm[B+1]+Z;return lerp(lerp(lerp(grad(perm[AA],x,y,z),grad(perm[BA],x-1,y,z),u),lerp(grad(perm[AB],x,y-1,z),grad(perm[BB],x-1,y-1,z),u),v),lerp(lerp(grad(perm[AA+1],x,y,z-1),grad(perm[BA+1],x-1,y,z-1),u),lerp(grad(perm[AB+1],x,y-1,z-1),grad(perm[BB+1],x-1,y-1,z-1),u),v),w)}function fbm(x,y,z){let n=0,a=.58,f=1,total=0;for(let o=0;o<3;o++){n+=noise(x*f,y*f,z*f)*a;total+=a;f*=2;a*=.5}return n/total*.5+.5}function smoothstep(a,b,x){x=Math.max(0,Math.min(1,(x-a)/(b-a)));return x*x*(3-2*x)}function size(l){const dpr=Math.min(1.5,devicePixelRatio||1),w=Math.max(96,Math.round(innerWidth*.28*dpr)),h=Math.max(64,Math.round(innerHeight*.28*dpr));if(l.el.width!==w||l.el.height!==h){l.el.width=w;l.el.height=h;l.ctx=l.el.getContext('2d',{alpha:true});l.img=l.ctx.createImageData(w,h)}}layers.forEach(size);addEventListener('resize',()=>layers.forEach(size));let last=0;function frame(ms){if(ms-last<70){requestAnimationFrame(frame);return}last=ms;const t=ms*.001;for(const l of layers){const{width:w,height:h}=l.el,d=l.img.data,ox=t*l.speedX*l.scale,oy=t*l.speedY*l.scale,oz=t*l.speedZ*l.scale;let k=0;for(let y=0;y<h;y++)for(let x=0;x<w;x++){const n=fbm(x/l.scale+ox,y/l.scale+oy,oz),a=smoothstep(l.threshold,Math.min(.86,l.threshold+.26),n)*l.alpha;d[k++]=255;d[k++]=255;d[k++]=255;d[k++]=(a*255)|0}l.ctx.putImageData(l.img,0,0)}requestAnimationFrame(frame)}requestAnimationFrame(frame)
-})();
+const canvas=document.getElementById('smoke');
+const ctx=canvas.getContext('2d');
+let particles=[];
+function resize(){canvas.width=innerWidth;canvas.height=innerHeight}
+function reset(p){p.x=Math.random()*canvas.width;p.y=canvas.height+Math.random()*100;p.r=40+Math.random()*100;p.v=.15+Math.random()*.35;p.a=.015+Math.random()*.025}
+function init(){particles=Array.from({length:28},()=>{const p={};reset(p);p.y=Math.random()*canvas.height;return p})}
+function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);for(const p of particles){p.y-=p.v;p.x+=Math.sin(p.y*.008)*.12;if(p.y+p.r<0)reset(p);const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r);g.addColorStop(0,`rgba(255,255,255,${p.a})`);g.addColorStop(1,'rgba(255,255,255,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill()}requestAnimationFrame(draw)}
+addEventListener('resize',()=>{resize();init()});resize();init();draw();
 </script>
-</body></html>
+</body>
+</html>
