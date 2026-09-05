@@ -1,0 +1,52 @@
+name: Install sevenDays font
+
+on:
+  push:
+    paths:
+      - '.github/workflows/install-seven-days-font.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  install-font:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rebuild and verify font
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64, zlib, hashlib
+
+          root = Path('.')
+          parts = [root / '.font-upload-new' / f'part{i}.txt' for i in range(1, 6)]
+          payload = ''.join(p.read_text().strip() for p in parts)
+          font = zlib.decompress(base64.b64decode(payload))
+          sha = hashlib.sha256(font).hexdigest()
+          expected = '8fe9636f3e8c0bbf6f80041b1523005939dc38af56904044f1396f6d5a0134c2'
+          if sha != expected:
+              raise SystemExit(f'font hash mismatch: {sha}')
+
+          out = root / 'app/src/main/assets/fonts/sevenDays.ttf'
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_bytes(font)
+
+          for p in parts:
+              p.unlink()
+          stage = root / '.font-upload-new'
+          if stage.exists() and not any(stage.iterdir()):
+              stage.rmdir()
+
+          workflow = root / '.github/workflows/install-seven-days-font.yml'
+          workflow.unlink()
+          print(f'Installed {out} ({len(font)} bytes), sha256={sha}')
+          PY
+
+      - name: Commit installed font
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Install sevenDays font'
+          git push
