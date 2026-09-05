@@ -18,8 +18,8 @@ canvas{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:no
 #installAnyway{appearance:none;border:2px solid #1d1d1d;background:#fff;color:#111;font:700 clamp(18px,4.5vw,26px)/1 Arial,Helvetica,sans-serif;padding:18px 24px;border-radius:8px;min-width:min(80vw,320px);letter-spacing:.02em;touch-action:manipulation}
 #installAnyway.waiting{background:#aaa;color:#555;border-color:#777}
 #warning.melting{pointer-events:none}
-.meltSlice{position:fixed;left:0;width:100%;z-index:11;background:#f2f2f2;overflow:hidden;will-change:transform}
-.meltSlice .meltCopy{position:absolute;left:0;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;padding:28px;color:#171717;font-family:Arial,Helvetica,sans-serif}
+.meltSlice{position:fixed;top:0;height:100vh;z-index:11;overflow:hidden;will-change:transform}
+.meltSlice .meltCopy{position:absolute;top:0;height:100vh;width:100vw;display:flex;align-items:center;justify-content:center;padding:28px;background:#f2f2f2;color:#171717;font-family:Arial,Helvetica,sans-serif}
 .meltSlice .meltCard{width:min(88vw,520px);text-align:center}
 .meltSlice .meltText{font-size:clamp(20px,5vw,32px);line-height:1.28;font-weight:600;margin:0 0 30px}
 .meltSlice .meltButton{display:inline-block;border:2px solid #1d1d1d;background:#fff;color:#111;font:700 clamp(18px,4.5vw,26px)/1 Arial,Helvetica,sans-serif;padding:18px 24px;border-radius:8px;min-width:min(80vw,320px);letter-spacing:.02em}
@@ -92,49 +92,82 @@ function playScareSound(){
   noise.start(now);
 }
 
+function fade(t){return t*t*t*(t*(t*6-15)+10)}
+function lerp(a,b,t){return a+(b-a)*t}
+function hash2(x,y){
+  let h=(x*374761393+y*668265263)^0x5bf03635;
+  h=(h^(h>>>13))*1274126177;
+  return ((h^(h>>>16))>>>0)/4294967295;
+}
+function gradDot(ix,iy,x,y){
+  const a=hash2(ix,iy)*Math.PI*2;
+  return Math.cos(a)*(x-ix)+Math.sin(a)*(y-iy);
+}
+function perlin2(x,y){
+  const x0=Math.floor(x),x1=x0+1;
+  const y0=Math.floor(y),y1=y0+1;
+  const sx=fade(x-x0),sy=fade(y-y0);
+  const n0=gradDot(x0,y0,x,y);
+  const n1=gradDot(x1,y0,x,y);
+  const ix0=lerp(n0,n1,sx);
+  const n2=gradDot(x0,y1,x,y);
+  const n3=gradDot(x1,y1,x,y);
+  const ix1=lerp(n2,n3,sx);
+  return lerp(ix0,ix1,sy);
+}
+
 function meltWarning(){
   if(melting)return;
   melting=true;
   warning.classList.add('melting');
 
-  const sliceHeight=8;
-  const count=Math.ceil(innerHeight/sliceHeight);
-  const slices=[];
+  const width=Math.max(1,Math.ceil(innerWidth));
+  const columns=[];
 
-  for(let i=0;i<count;i++){
-    const top=i*sliceHeight;
+  for(let x=0;x<width;x++){
     const slice=document.createElement('div');
     slice.className='meltSlice';
-    slice.style.top=`${top}px`;
-    slice.style.height=`${Math.min(sliceHeight,innerHeight-top)}px`;
+    slice.style.left=`${x}px`;
+    slice.style.width='1px';
 
     const copy=document.createElement('div');
     copy.className='meltCopy';
-    copy.style.top=`-${top}px`;
+    copy.style.left=`-${x}px`;
     copy.innerHTML='<div class="meltCard"><p class="meltText">For your protection, your phone is blocking this app from updating.</p><div class="meltButton">INSTALL ANYWAY</div></div>';
     slice.appendChild(copy);
     document.body.appendChild(slice);
-    slices.push(slice);
+
+    columns.push({el:slice,x});
   }
 
   warning.style.visibility='hidden';
 
-  requestAnimationFrame(()=>{
-    slices.forEach((slice,i)=>{
-      const wave=(Math.sin(i*.72)+1)*55;
-      const jitter=Math.random()*110;
-      const distance=innerHeight+wave+jitter;
-      const duration=900+Math.random()*450;
-      const delay=(i%9)*10+Math.random()*70;
-      slice.style.transition=`transform ${duration}ms cubic-bezier(.2,.7,.1,1) ${delay}ms`;
-      slice.style.transform=`translateY(${distance}px)`;
-    });
-  });
+  const start=performance.now();
+  const duration=1500;
+  function animate(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/duration);
+    const eased=t*t*(3-2*t);
 
-  setTimeout(()=>{
-    slices.forEach(slice=>slice.remove());
-    warning.remove();
-  },1600);
+    for(const column of columns){
+      const nx=column.x*0.018;
+      const n=perlin2(nx,t*2.2);
+      const shaped=(n+1)*0.5;
+      const localStart=shaped*0.34;
+      const localT=Math.max(0,Math.min(1,(t-localStart)/(1-localStart)));
+      const fall=localT*localT*(3-2*localT);
+      const distance=(innerHeight+140)*fall;
+      column.el.style.transform=`translateY(${distance}px)`;
+    }
+
+    if(t<1){
+      requestAnimationFrame(animate);
+    }else{
+      columns.forEach(column=>column.el.remove());
+      warning.remove();
+    }
+  }
+  requestAnimationFrame(animate);
 }
 
 installAnyway.addEventListener('pointerdown',event=>{
