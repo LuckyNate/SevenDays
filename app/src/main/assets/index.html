@@ -143,20 +143,25 @@ function meltWarning(){
   warning.style.visibility='hidden';
 
   const start=performance.now();
-  const duration=1500;
+  const duration=1850;
   function animate(now){
     const elapsed=now-start;
     const t=Math.min(1,elapsed/duration);
     const eased=t*t*(3-2*t);
 
     for(const column of columns){
-      const nx=column.x*0.018;
-      const n=perlin2(nx,t*2.2);
-      const shaped=(n+1)*0.5;
-      const localStart=shaped*0.34;
-      const localT=Math.max(0,Math.min(1,(t-localStart)/(1-localStart)));
+      const xNorm=column.x/Math.max(1,width-1);
+      const centerBias=1-Math.abs(xNorm-.5)*2;
+      const edgeCling=Math.pow(centerBias,1.35);
+      const broad=perlin2(column.x*0.008,t*0.95);
+      const fine=perlin2(column.x*0.045,t*1.8);
+      const broad01=(broad+1)*0.5;
+      const fine01=(fine+1)*0.5;
+      const startDelay=(1-edgeCling)*0.22 + broad01*0.18;
+      const localT=Math.max(0,Math.min(1,(t-startDelay)/(1-startDelay)));
       const fall=localT*localT*(3-2*localT);
-      const distance=(innerHeight+140)*fall;
+      const drip=Math.pow(fine01,5)*innerHeight*0.18*fall;
+      const distance=(innerHeight+160)*(0.88+0.18*edgeCling)*fall + drip;
       column.el.style.transform=`translateY(${distance}px)`;
     }
 
