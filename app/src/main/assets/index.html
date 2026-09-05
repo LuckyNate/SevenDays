@@ -154,9 +154,13 @@ installAnyway.addEventListener('pointerdown',event=>{
 
   if(tapCount===2){
     installAnyway.classList.add('waiting');
+    setTimeout(()=>{
+      if(tapCount===2&&!melting)installAnyway.classList.remove('waiting');
+    },2000);
     return;
   }
 
+  installAnyway.classList.add('waiting');
   installAnyway.style.pointerEvents='none';
   setTimeout(()=>{
     playScareSound();
