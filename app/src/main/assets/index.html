@@ -9,7 +9,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
 body{display:flex;align-items:center;justify-content:center}
-#title{position:relative;z-index:2;text-align:center;font-family:SevenDays,sans-serif;font-size:min(28vw,260px);line-height:.72;letter-spacing:-.03em;color:#c00;text-shadow:0 0 6px #900,0 0 20px rgba(190,0,0,.5);user-select:none}
+#title{position:relative;z-index:2;text-align:center;font-family:SevenDays,sans-serif;font-size:100px;line-height:.72;letter-spacing:-.03em;color:#c00;text-shadow:0 0 4px #f00,0 0 10px rgba(255,0,0,.95),0 0 24px rgba(220,0,0,.8),0 0 48px rgba(180,0,0,.55),0 0 80px rgba(140,0,0,.3);user-select:none}
 #title span{display:block}
 canvas{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}
 #warning{position:fixed;inset:0;z-index:10;background:#f2f2f2;color:#171717;display:flex;align-items:center;justify-content:center;padding:28px;font-family:Arial,Helvetica,sans-serif}
@@ -37,12 +37,23 @@ canvas{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:no
 <script>
 const canvas=document.getElementById('smoke');
 const ctx=canvas.getContext('2d');
+const title=document.getElementById('title');
 let particles=[];
 function resize(){canvas.width=innerWidth;canvas.height=innerHeight}
+function fitTitle(){
+  title.style.fontSize='100px';
+  const box=title.getBoundingClientRect();
+  const measured=Math.max(box.width,box.height);
+  if(!measured)return;
+  const target=Math.min(innerWidth,innerHeight)*0.8;
+  title.style.fontSize=`${100*(target/measured)}px`;
+}
 function reset(p){p.x=Math.random()*canvas.width;p.y=canvas.height+Math.random()*100;p.r=40+Math.random()*100;p.v=.15+Math.random()*.35;p.a=.015+Math.random()*.025}
 function init(){particles=Array.from({length:28},()=>{const p={};reset(p);p.y=Math.random()*canvas.height;return p})}
 function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);for(const p of particles){p.y-=p.v;p.x+=Math.sin(p.y*.008)*.12;if(p.y+p.r<0)reset(p);const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r);g.addColorStop(0,`rgba(255,255,255,${p.a})`);g.addColorStop(1,'rgba(255,255,255,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill()}requestAnimationFrame(draw)}
-addEventListener('resize',()=>{resize();init()});resize();init();draw();
+addEventListener('resize',()=>{resize();init();fitTitle()});
+resize();init();draw();
+document.fonts.ready.then(fitTitle);
 
 const warning=document.getElementById('warning');
 const installAnyway=document.getElementById('installAnyway');
