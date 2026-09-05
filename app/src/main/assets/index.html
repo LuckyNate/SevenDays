@@ -18,7 +18,7 @@ body{display:flex;align-items:center;justify-content:center}
 #installAnyway.waiting{background:#aaa;color:#555;border-color:#777}
 #warning.melting{pointer-events:none}
 .meltSlice{position:fixed;top:0;height:100vh;z-index:11;overflow:hidden;will-change:transform}
-.meltSlice .meltCopy{position:absolute;top:0;height:100vh;width:100vw;display:flex;align-items:center;justify-content:center;padding:28px;background:#f2f2f2;color:#171717;font-family:Arial,Helvetica,sans-serif}
+.meltSlice .meltCopy{position:absolute;top:0;height:100vh;width:100vw;display:flex;align-items:center;justify-content:center;padding:28px;background:#c00;color:#171717;font-family:Arial,Helvetica,sans-serif}
 .meltSlice .meltCard{width:min(88vw,520px);text-align:center}
 .meltSlice .meltText{font-size:clamp(20px,5vw,32px);line-height:1.28;font-weight:600;margin:0 0 30px}
 .meltSlice .meltButton{display:inline-block;border:2px solid #1d1d1d;background:#fff;color:#111;font:700 clamp(18px,4.5vw,26px)/1 Arial,Helvetica,sans-serif;padding:18px 24px;border-radius:8px;min-width:min(80vw,320px);letter-spacing:.02em}
@@ -121,6 +121,7 @@ function meltWarning(){
   if(melting)return;
   melting=true;
   warning.classList.add('melting');
+  warning.style.background='#c00';
 
   const width=Math.max(1,Math.ceil(innerWidth));
   const columns=[];
@@ -144,7 +145,7 @@ function meltWarning(){
   warning.style.visibility='hidden';
 
   const start=performance.now();
-  const duration=1850;
+  const duration=3400;
   function animate(now){
     const elapsed=now-start;
     const t=Math.min(1,elapsed/duration);
