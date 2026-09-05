@@ -11,7 +11,6 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
 body{display:flex;align-items:center;justify-content:center}
 #title{position:relative;z-index:2;text-align:center;font-family:SevenDays,sans-serif;font-size:100px;line-height:.72;letter-spacing:-.03em;color:#c00;user-select:none}
 #title span{display:block}
-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}
 #warning{position:fixed;inset:0;z-index:10;background:#f2f2f2;color:#171717;display:flex;align-items:center;justify-content:center;padding:28px;font-family:Arial,Helvetica,sans-serif}
 #warningCard{width:min(88vw,520px);text-align:center}
 #warningText{font-size:clamp(20px,5vw,32px);line-height:1.28;font-weight:600;margin:0 0 30px}
@@ -26,7 +25,6 @@ canvas{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:no
 </style>
 </head>
 <body>
-<canvas id="smoke"></canvas>
 <div id="title"><span>SEVEN</span><span>DAYS</span></div>
 <div id="warning">
   <div id="warningCard">
@@ -35,11 +33,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:no
   </div>
 </div>
 <script>
-const canvas=document.getElementById('smoke');
-const ctx=canvas.getContext('2d');
 const title=document.getElementById('title');
-let particles=[];
-function resize(){canvas.width=innerWidth;canvas.height=innerHeight}
 function fitTitle(){
   title.style.fontSize='100px';
   const box=title.getBoundingClientRect();
@@ -48,11 +42,7 @@ function fitTitle(){
   const target=Math.min(innerWidth,innerHeight)*0.8;
   title.style.fontSize=`${100*(target/measured)}px`;
 }
-function reset(p){p.x=Math.random()*canvas.width;p.y=canvas.height+Math.random()*100;p.r=40+Math.random()*100;p.v=.15+Math.random()*.35;p.a=.015+Math.random()*.025}
-function init(){particles=Array.from({length:28},()=>{const p={};reset(p);p.y=Math.random()*canvas.height;return p})}
-function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);for(const p of particles){p.y-=p.v;p.x+=Math.sin(p.y*.008)*.12;if(p.y+p.r<0)reset(p);const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r);g.addColorStop(0,`rgba(255,255,255,${p.a})`);g.addColorStop(1,'rgba(255,255,255,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill()}requestAnimationFrame(draw)}
-addEventListener('resize',()=>{resize();init();fitTitle()});
-resize();init();draw();
+addEventListener('resize',fitTitle);
 document.fonts.ready.then(fitTitle);
 
 const warning=document.getElementById('warning');
@@ -158,7 +148,6 @@ function meltWarning(){
   function animate(now){
     const elapsed=now-start;
     const t=Math.min(1,elapsed/duration);
-    const eased=t*t*(3-2*t);
 
     for(const column of columns){
       const xNorm=column.x/Math.max(1,width-1);
