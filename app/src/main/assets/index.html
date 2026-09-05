@@ -44,7 +44,7 @@ addEventListener('resize',fitTitle);
 
 document.fonts.ready.then(()=>{
   fitTitle();
-  const fog=new VolumetricFog({grid:16,zIndex:0});
+  const fog=new VolumetricFog({size:32,zIndex:0});
   const bloom=new TitleBloom(title,{zIndex:1});
   fog.start();
   bloom.start();
