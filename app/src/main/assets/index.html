@@ -87,64 +87,6 @@ function playScareSound(){
   noise.start(now);
 }
 
-function findBottomLineDripPoints(canvas,bottomRect,dpr){
-  try{
-    const ctx=canvas.getContext('2d');
-    const left=Math.max(0,Math.floor(bottomRect.left*dpr));
-    const top=Math.max(0,Math.floor(bottomRect.top*dpr));
-    const width=Math.max(1,Math.min(canvas.width-left,Math.ceil(bottomRect.width*dpr)));
-    const height=Math.max(1,Math.min(canvas.height-top,Math.ceil(bottomRect.height*dpr)));
-    const image=ctx.getImageData(left,top,width,height);
-    const alpha=image.data;
-    const xStep=Math.max(4,Math.round(8*dpr));
-    const yStep=Math.max(2,Math.round(4*dpr));
-    const active=[];
-
-    for(let x=0;x<width;x+=xStep){
-      let bottom=-1;
-      for(let y=height-1;y>=0;y-=yStep){
-        let hit=false;
-        for(let yy=Math.max(0,y-yStep+1);yy<=y&&!hit;yy++){
-          const a=alpha[(yy*width+x)*4+3];
-          if(a>32)hit=true;
-        }
-        if(hit){bottom=y;break;}
-      }
-      active.push({x,bottom});
-    }
-
-    const segments=[];
-    let current=null;
-    for(const sample of active){
-      if(sample.bottom>=0){
-        if(!current)current={start:sample.x,end:sample.x,lowest:sample.bottom};
-        else{current.end=sample.x;current.lowest=Math.max(current.lowest,sample.bottom);}
-      }else if(current){
-        segments.push(current);current=null;
-      }
-    }
-    if(current)segments.push(current);
-
-    const usable=segments.filter(s=>s.end-s.start>=xStep);
-    usable.sort((a,b)=>(b.end-b.start)-(a.end-a.start));
-    const chosen=[];
-    const pool=usable.slice(0,Math.min(6,usable.length));
-    while(pool.length&&chosen.length<2){
-      const index=Math.floor(Math.random()*pool.length);
-      chosen.push(pool.splice(index,1)[0]);
-    }
-
-    return chosen.map(s=>{
-      const xPx=left+(s.start+s.end)*0.5;
-      const yPx=top+s.lowest;
-      return [xPx/canvas.width,1-yPx/canvas.height];
-    });
-  }catch(error){
-    console.warn('Title drip sampling unavailable',error);
-    return [];
-  }
-}
-
 function captureTitleSnapshot(){
   try{
     const dpr=Math.min(devicePixelRatio||1,2);
@@ -161,8 +103,7 @@ function captureTitleSnapshot(){
     ctx.textBaseline='alphabetic';
     ctx.font=`${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
 
-    const spans=[...title.querySelectorAll('span')];
-    for(const span of spans){
+    for(const span of title.querySelectorAll('span')){
       const rect=span.getBoundingClientRect();
       const text=span.textContent||'';
       const metrics=ctx.measureText(text);
@@ -171,12 +112,10 @@ function captureTitleSnapshot(){
       const baseline=rect.top+(rect.height+ascent-descent)*0.5;
       ctx.fillText(text,rect.left+rect.width*0.5,baseline);
     }
-
-    const bottomRect=spans.length?spans[spans.length-1].getBoundingClientRect():title.getBoundingClientRect();
-    return {canvas,dripPoints:findBottomLineDripPoints(canvas,bottomRect,dpr)};
+    return canvas;
   }catch(error){
     console.warn('Title adhesion capture unavailable',error);
-    return {canvas:null,dripPoints:[]};
+    return null;
   }
 }
 
@@ -186,14 +125,13 @@ function meltWarning(){
   warning.classList.add('melting');
   warning.style.background='#c00';
 
-  const capture=captureTitleSnapshot();
+  const adhesionCanvas=captureTitleSnapshot();
   const bloodMelt=new BloodMelt({
     color:'#cc0000',
     duration:5600,
     zIndex:20,
     edgeAdhesion:0.20,
-    adhesionCanvas:capture.canvas,
-    dripPoints:capture.dripPoints
+    adhesionCanvas
   });
   warning.style.visibility='hidden';
   bloodMelt.start({onComplete:()=>{
