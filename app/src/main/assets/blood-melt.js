@@ -3,11 +3,11 @@
  * Standalone side module: nothing is mounted until BloodMelt is constructed.
  *
  * Usage:
- *   const melt = new BloodMelt({ color: '#cc0000', duration: 3400 });
+ *   const melt = new BloodMelt({ color: '#cc0000', duration: 5600 });
  *   melt.start({ onComplete: () => melt.destroy() });
  *
  * The fragment shader keeps the red layer connected as one viscous sheet,
- * adds a few faster gravity channels, and rounds/softens the moving edge.
+ * adds many finer gravity channels, and rounds/softens the moving edge.
  */
 (function (global) {
   'use strict';
@@ -60,52 +60,45 @@
     }
 
     float channelField(float x) {
-      float broad = fbm(vec2(x * 3.0 + u_seed, u_seed * 0.21));
-      float fine = fbm(vec2(x * 10.0 - u_seed * 0.37, 8.0 + u_seed));
-      float channel = smoothstep(0.63, 0.86, broad * 0.72 + fine * 0.28);
+      float broad = fbm(vec2(x * 8.0 + u_seed, u_seed * 0.21));
+      float fine = fbm(vec2(x * 28.0 - u_seed * 0.37, 8.0 + u_seed));
+      float channel = smoothstep(0.60, 0.84, broad * 0.68 + fine * 0.32);
       return channel;
     }
 
     void main() {
       vec2 uv = v_uv;
       float aspect = u_resolution.x / max(u_resolution.y, 1.0);
-
-      // Progress begins with a nearly solid sheet, then gravity pulls the
-      // connected lower boundary down and offscreen.
       float p = smoothstep(0.0, 1.0, u_progress);
 
       float x = uv.x * aspect;
-      float broad = fbm(vec2(x * 2.2 + u_seed * 0.11, u_seed * 0.37));
-      float medium = fbm(vec2(x * 6.0 - u_seed * 0.09, 13.0 + u_seed));
+      float broad = fbm(vec2(x * 5.5 + u_seed * 0.11, u_seed * 0.37));
+      float medium = fbm(vec2(x * 16.0 - u_seed * 0.09, 13.0 + u_seed));
       float channels = channelField(x);
 
-      // Main connected liquid-sheet boundary. Early in the animation the
-      // boundary remains near the bottom. It then drops continuously.
+      // Start as a full red sheet. The lower edge moves from the top of the
+      // screen toward the bottom, so the liquid visibly drains downward.
       float baseBoundary = 1.08 - p * 2.05;
-      float sag = (broad - 0.5) * 0.22 + (medium - 0.5) * 0.08;
+      float sag = (broad - 0.5) * 0.16 + (medium - 0.5) * 0.07;
 
-      // Sparse channels drain farther/faster, creating long blood fingers.
-      float channelPull = channels * (0.18 + p * 0.70);
-      float boundary = baseBoundary + sag - channelPull;
+      // Finer drainage channels move farther downward than the surrounding
+      // connected sheet, creating many narrow fingers rather than a few lobes.
+      float channelPull = channels * (0.10 + p * 0.48);
+      float boundary = baseBoundary - channelPull + sag;
 
-      // Slight vertical distortion prevents a mathematically flat liquid edge.
-      float edgeNoise = fbm(vec2(x * 9.0, uv.y * 3.0 + u_seed));
-      boundary += (edgeNoise - 0.5) * 0.035;
+      float edgeNoise = fbm(vec2(x * 24.0, uv.y * 5.0 + u_seed));
+      boundary += (edgeNoise - 0.5) * 0.025;
 
-      // Red remains above the moving boundary. Smooth edge gives rounded wet
-      // tips instead of rectangular strip endings.
-      float edgeSoftness = 0.018;
-      float mask = smoothstep(boundary - edgeSoftness, boundary + edgeSoftness, uv.y);
+      float edgeSoftness = 0.014;
+      float mask = 1.0 - smoothstep(boundary - edgeSoftness, boundary + edgeSoftness, uv.y);
 
-      // Bulb the strongest channels near their tips.
-      float bulbStrength = channels * smoothstep(0.08, 0.55, p) * (1.0 - smoothstep(0.82, 1.0, p));
-      float localTip = abs(uv.y - (boundary - 0.035));
-      float bulb = bulbStrength * smoothstep(0.075, 0.0, localTip);
+      // Add small rounded bulbs around the strongest channel tips.
+      float bulbStrength = channels * smoothstep(0.10, 0.60, p) * (1.0 - smoothstep(0.88, 1.0, p));
+      float localTip = abs(uv.y - (boundary + 0.020));
+      float bulb = bulbStrength * smoothstep(0.050, 0.0, localTip);
       mask = max(mask, bulb);
 
-      // Wetness variation is intentionally subtle so it still reads as blood,
-      // not glossy plastic.
-      float wet = 0.90 + fbm(vec2(uv.x * 7.0, uv.y * 5.0 + u_seed)) * 0.10;
+      float wet = 0.90 + fbm(vec2(uv.x * 15.0, uv.y * 8.0 + u_seed)) * 0.10;
       vec3 color = u_color * wet;
 
       gl_FragColor = vec4(color, clamp(mask, 0.0, 1.0));
@@ -126,7 +119,7 @@
 
   class BloodMelt {
     constructor(options = {}) {
-      this.duration = options.duration ?? 3400;
+      this.duration = options.duration ?? 5600;
       this.color = parseColor(options.color ?? '#cc0000');
       this.seed = options.seed ?? Math.random() * 1000;
       this.zIndex = options.zIndex ?? 20;
