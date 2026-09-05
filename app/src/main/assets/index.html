@@ -56,7 +56,6 @@ function playScareSound(){
   if(!audioContext)return;
   const now=audioContext.currentTime;
   const duration=.72;
-
   const oscillator=audioContext.createOscillator();
   const oscillatorGain=audioContext.createGain();
   oscillator.type='sawtooth';
@@ -73,7 +72,6 @@ function playScareSound(){
   const buffer=audioContext.createBuffer(1,frameCount,audioContext.sampleRate);
   const data=buffer.getChannelData(0);
   for(let i=0;i<frameCount;i++)data[i]=(Math.random()*2-1)*(1-i/frameCount);
-
   const noise=audioContext.createBufferSource();
   const filter=audioContext.createBiquadFilter();
   const noiseGain=audioContext.createGain();
@@ -89,15 +87,53 @@ function playScareSound(){
   noise.start(now);
 }
 
-function meltWarning(){
+async function captureTitleSnapshot(){
+  try{
+    await document.fonts.ready;
+    const dpr=Math.min(devicePixelRatio||1,2);
+    const width=Math.max(1,innerWidth|0);
+    const height=Math.max(1,innerHeight|0);
+    const rect=title.getBoundingClientRect();
+    const style=getComputedStyle(title);
+    const fontBytes=await fetch('fonts/sevenDays.ttf').then(r=>r.arrayBuffer());
+    let binary='';
+    const bytes=new Uint8Array(fontBytes);
+    for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
+    const fontData=btoa(binary);
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><foreignObject x="0" y="0" width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="position:relative;width:${width}px;height:${height}px;background:transparent"><style>@font-face{font-family:SevenDays;src:url(data:font/ttf;base64,${fontData}) format('truetype')}</style><div style="position:absolute;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;text-align:${style.textAlign};font-family:SevenDays;font-size:${style.fontSize};line-height:${style.lineHeight};letter-spacing:${style.letterSpacing};color:#c00"><span style="display:block">SEVEN</span><span style="display:block">DAYS</span></div></div></foreignObject></svg>`;
+    const blob=new Blob([svg],{type:'image/svg+xml'});
+    const url=URL.createObjectURL(blob);
+    const image=new Image();
+    await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=reject;image.src=url});
+    const canvas=document.createElement('canvas');
+    canvas.width=Math.round(width*dpr);
+    canvas.height=Math.round(height*dpr);
+    const ctx=canvas.getContext('2d');
+    ctx.scale(dpr,dpr);
+    ctx.drawImage(image,0,0,width,height);
+    URL.revokeObjectURL(url);
+    return canvas;
+  }catch(error){
+    console.warn('Title adhesion capture unavailable',error);
+    return null;
+  }
+}
+
+async function meltWarning(){
   if(melting)return;
   melting=true;
   warning.classList.add('melting');
   warning.style.background='#c00';
 
-  const bloodMelt=new BloodMelt({color:'#cc0000',duration:5600,zIndex:20});
+  const adhesionCanvas=await captureTitleSnapshot();
+  const bloodMelt=new BloodMelt({
+    color:'#cc0000',
+    duration:5600,
+    zIndex:20,
+    edgeAdhesion:0.20,
+    adhesionCanvas
+  });
   warning.style.visibility='hidden';
-
   bloodMelt.start({onComplete:()=>{
     bloodMelt.destroy();
     warning.remove();
@@ -113,17 +149,12 @@ installAnyway.addEventListener('pointerdown',event=>{
 
   if(tapCount===1){
     installAnyway.classList.add('waiting');
-    setTimeout(()=>{
-      if(tapCount===1&&!melting)installAnyway.classList.remove('waiting');
-    },220);
+    setTimeout(()=>{if(tapCount===1&&!melting)installAnyway.classList.remove('waiting')},220);
     return;
   }
-
   if(tapCount===2){
     installAnyway.classList.add('waiting');
-    setTimeout(()=>{
-      if(tapCount===2&&!melting)installAnyway.classList.remove('waiting');
-    },2000);
+    setTimeout(()=>{if(tapCount===2&&!melting)installAnyway.classList.remove('waiting')},2000);
     return;
   }
 
