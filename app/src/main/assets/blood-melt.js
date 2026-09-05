@@ -22,6 +22,9 @@
     uniform sampler2D u_adhesion;
     uniform float u_hasAdhesion;
     uniform float u_edgeAdhesion;
+    uniform float u_dripCount;
+    uniform vec2 u_drip0;
+    uniform vec2 u_drip1;
 
     float hash(float n) { return fract(sin(n) * 43758.5453123); }
 
@@ -37,7 +40,11 @@
 
     float fbm(vec2 p) {
       float value=0.0, amp=0.5;
-      for(int i=0;i<5;i++){ value+=noise(p)*amp; p=p*2.03+vec2(19.17,7.31); amp*=0.5; }
+      for(int i=0;i<5;i++){
+        value+=noise(p)*amp;
+        p=p*2.03+vec2(19.17,7.31);
+        amp*=0.5;
+      }
       return value;
     }
 
@@ -63,34 +70,28 @@
       return max(a,halo*0.55);
     }
 
+    float oneLetterDrip(vec2 uv, vec2 anchor, float index, float p) {
+      float start=0.58+hash(u_seed*2.71+index*11.9)*0.10;
+      float life=smoothstep(start,start+0.08,p)*(1.0-smoothstep(0.91,0.995,p));
+      float longTear=step(0.70,hash(u_seed*5.93+index*23.1));
+      float maxLength=mix(0.10,0.20,hash(u_seed*6.73+index*13.1));
+      maxLength=mix(maxLength,0.34,longTear);
+      float length=maxLength*smoothstep(start,0.88,p);
+      float width=mix(0.0025,0.0055,hash(u_seed*9.17+index*7.3));
+      float wobble=(fbm(vec2(anchor.x*35.0,u_seed+index))-0.5)*0.014;
+      float x=anchor.x+wobble*(1.0-smoothstep(start,0.92,p));
+      float dx=abs(uv.x-x);
+      float bottom=anchor.y-length;
+      float vertical=step(bottom,uv.y)*step(uv.y,anchor.y);
+      float streak=(1.0-smoothstep(width,width*2.2,dx))*vertical;
+      float tip=smoothstep(width*4.5,0.0,length(vec2((uv.x-x)*1.25,uv.y-bottom)));
+      return max(streak,tip)*life;
+    }
+
     float sparseLetterDrips(vec2 uv,float p) {
-      if(u_hasAdhesion<0.5)return 0.0;
-      vec2 px=vec2(1.0)/max(u_resolution,vec2(1.0));
       float drip=0.0;
-      for(int i=0;i<3;i++){
-        float fi=float(i);
-        float x=0.18+hash(u_seed*4.31+fi*17.7)*0.64;
-        float gate=step(0.43,hash(u_seed*8.19+fi*29.3));
-        float start=0.52+hash(u_seed*2.71+fi*11.9)*0.18;
-        float life=smoothstep(start,start+0.08,p)*(1.0-smoothstep(0.90,0.99,p));
-        float source=0.0;
-        for(int j=0;j<28;j++){
-          float y=0.20+float(j)/27.0*0.62;
-          float here=texture2D(u_adhesion,vec2(x,y)).a;
-          float below=texture2D(u_adhesion,vec2(x,min(1.0,y+px.y*8.0))).a;
-          source=max(source,here*(1.0-below)*y);
-        }
-        float strength=smoothstep(0.08,0.32,source)*gate*life;
-        float anchorY=clamp(source+0.30,0.30,0.78);
-        float length=mix(0.08,0.30,hash(u_seed*6.73+fi*13.1))*smoothstep(start,0.88,p);
-        float width=mix(0.0025,0.0060,hash(u_seed*9.17+fi*7.3));
-        float dx=abs(uv.x-x);
-        float vertical=step(anchorY-length,uv.y)*step(uv.y,anchorY);
-        float streak=(1.0-smoothstep(width,width*2.4,dx))*vertical;
-        float tipY=anchorY-length;
-        float tip=smoothstep(width*4.0,0.0,length(vec2((uv.x-x)*1.3,uv.y-tipY)));
-        drip=max(drip,max(streak,tip)*strength);
-      }
+      if(u_dripCount>0.5)drip=max(drip,oneLetterDrip(uv,u_drip0,0.0,p));
+      if(u_dripCount>1.5)drip=max(drip,oneLetterDrip(uv,u_drip1,1.0,p));
       return drip;
     }
 
@@ -134,37 +135,107 @@
 
   class BloodMelt {
     constructor(options={}) {
-      this.duration=options.duration??5600; this.color=parseColor(options.color??'#cc0000');
-      this.seed=options.seed??Math.random()*1000; this.zIndex=options.zIndex??20;
-      this.edgeAdhesion=options.edgeAdhesion??0.20; this.adhesionCanvas=options.adhesionCanvas??null;
-      this.running=false; this.startTime=0; this.onComplete=null;
-      this.canvas=document.createElement('canvas'); this.canvas.setAttribute('aria-hidden','true');
+      this.duration=options.duration??5600;
+      this.color=parseColor(options.color??'#cc0000');
+      this.seed=options.seed??Math.random()*1000;
+      this.zIndex=options.zIndex??20;
+      this.edgeAdhesion=options.edgeAdhesion??0.20;
+      this.adhesionCanvas=options.adhesionCanvas??null;
+      this.dripPoints=(options.dripPoints||[]).slice(0,2);
+      this.running=false;
+      this.startTime=0;
+      this.onComplete=null;
+      this.canvas=document.createElement('canvas');
+      this.canvas.setAttribute('aria-hidden','true');
       Object.assign(this.canvas.style,{position:'fixed',inset:'0',width:'100%',height:'100%',pointerEvents:'none',zIndex:String(this.zIndex),background:'transparent'});
       document.body.appendChild(this.canvas);
       this.gl=this.canvas.getContext('webgl',{alpha:true,antialias:false,premultipliedAlpha:false});
       if(!this.gl){this.canvas.remove();throw new Error('BloodMelt requires WebGL');}
-      this._frame=this._frame.bind(this); this._resize=this.resize.bind(this); global.addEventListener('resize',this._resize);
-      this._initGl(); this.resize(); this.draw(0);
+      this._frame=this._frame.bind(this);
+      this._resize=this.resize.bind(this);
+      global.addEventListener('resize',this._resize);
+      this._initGl();
+      this.resize();
+      this.draw(0);
     }
-    _compile(type,source){const gl=this.gl,shader=gl.createShader(type);gl.shaderSource(shader,source);gl.compileShader(shader);if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS)){const message=gl.getShaderInfoLog(shader)||'shader compile failed';gl.deleteShader(shader);throw new Error(message);}return shader;}
+
+    _compile(type,source){
+      const gl=this.gl,shader=gl.createShader(type);
+      gl.shaderSource(shader,source);gl.compileShader(shader);
+      if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS)){
+        const message=gl.getShaderInfoLog(shader)||'shader compile failed';
+        gl.deleteShader(shader);throw new Error(message);
+      }
+      return shader;
+    }
+
     _initGl(){
-      const gl=this.gl,program=gl.createProgram(),vertex=this._compile(gl.VERTEX_SHADER,VERTEX_SHADER),fragment=this._compile(gl.FRAGMENT_SHADER,FRAGMENT_SHADER);
-      gl.attachShader(program,vertex);gl.attachShader(program,fragment);gl.linkProgram(program);gl.deleteShader(vertex);gl.deleteShader(fragment);
-      if(!gl.getProgramParameter(program,gl.LINK_STATUS)){const message=gl.getProgramInfoLog(program)||'shader link failed';gl.deleteProgram(program);throw new Error(message);}
-      this.program=program;gl.useProgram(program);this.buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
-      const position=gl.getAttribLocation(program,'a_position');gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);
-      this.uniforms={resolution:gl.getUniformLocation(program,'u_resolution'),progress:gl.getUniformLocation(program,'u_progress'),seed:gl.getUniformLocation(program,'u_seed'),color:gl.getUniformLocation(program,'u_color'),adhesion:gl.getUniformLocation(program,'u_adhesion'),hasAdhesion:gl.getUniformLocation(program,'u_hasAdhesion'),edgeAdhesion:gl.getUniformLocation(program,'u_edgeAdhesion')};
-      this.adhesionTexture=gl.createTexture();gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.adhesionTexture);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
-      if(this.adhesionCanvas)gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,this.adhesionCanvas);else gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([0,0,0,0]));
-      gl.uniform1i(this.uniforms.adhesion,0);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.clearColor(0,0,0,0);
+      const gl=this.gl,program=gl.createProgram();
+      const vertex=this._compile(gl.VERTEX_SHADER,VERTEX_SHADER);
+      const fragment=this._compile(gl.FRAGMENT_SHADER,FRAGMENT_SHADER);
+      gl.attachShader(program,vertex);gl.attachShader(program,fragment);gl.linkProgram(program);
+      gl.deleteShader(vertex);gl.deleteShader(fragment);
+      if(!gl.getProgramParameter(program,gl.LINK_STATUS)){
+        const message=gl.getProgramInfoLog(program)||'shader link failed';
+        gl.deleteProgram(program);throw new Error(message);
+      }
+      this.program=program;gl.useProgram(program);
+      this.buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);
+      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+      const position=gl.getAttribLocation(program,'a_position');
+      gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);
+      this.uniforms={
+        resolution:gl.getUniformLocation(program,'u_resolution'),
+        progress:gl.getUniformLocation(program,'u_progress'),
+        seed:gl.getUniformLocation(program,'u_seed'),
+        color:gl.getUniformLocation(program,'u_color'),
+        adhesion:gl.getUniformLocation(program,'u_adhesion'),
+        hasAdhesion:gl.getUniformLocation(program,'u_hasAdhesion'),
+        edgeAdhesion:gl.getUniformLocation(program,'u_edgeAdhesion'),
+        dripCount:gl.getUniformLocation(program,'u_dripCount'),
+        drip0:gl.getUniformLocation(program,'u_drip0'),
+        drip1:gl.getUniformLocation(program,'u_drip1')
+      };
+      this.adhesionTexture=gl.createTexture();gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.adhesionTexture);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+      if(this.adhesionCanvas)gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,this.adhesionCanvas);
+      else gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([0,0,0,0]));
+      gl.uniform1i(this.uniforms.adhesion,0);
+      gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.clearColor(0,0,0,0);
     }
-    resize(){const dpr=Math.min(global.devicePixelRatio||1,2),width=Math.max(1,Math.round(global.innerWidth*dpr)),height=Math.max(1,Math.round(global.innerHeight*dpr));if(this.canvas.width!==width||this.canvas.height!==height){this.canvas.width=width;this.canvas.height=height;}this.gl.viewport(0,0,width,height);}
-    draw(progress){const gl=this.gl;gl.useProgram(this.program);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.adhesionTexture);gl.clear(gl.COLOR_BUFFER_BIT);gl.uniform2f(this.uniforms.resolution,this.canvas.width,this.canvas.height);gl.uniform1f(this.uniforms.progress,Math.max(0,Math.min(1,progress)));gl.uniform1f(this.uniforms.seed,this.seed);gl.uniform3f(this.uniforms.color,this.color[0],this.color[1],this.color[2]);gl.uniform1f(this.uniforms.hasAdhesion,this.adhesionCanvas?1:0);gl.uniform1f(this.uniforms.edgeAdhesion,this.edgeAdhesion);gl.drawArrays(gl.TRIANGLES,0,6);}
+
+    resize(){
+      const dpr=Math.min(global.devicePixelRatio||1,2);
+      const width=Math.max(1,Math.round(global.innerWidth*dpr));
+      const height=Math.max(1,Math.round(global.innerHeight*dpr));
+      if(this.canvas.width!==width||this.canvas.height!==height){this.canvas.width=width;this.canvas.height=height;}
+      this.gl.viewport(0,0,width,height);
+    }
+
+    draw(progress){
+      const gl=this.gl;
+      gl.useProgram(this.program);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.adhesionTexture);gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.uniform2f(this.uniforms.resolution,this.canvas.width,this.canvas.height);
+      gl.uniform1f(this.uniforms.progress,Math.max(0,Math.min(1,progress)));
+      gl.uniform1f(this.uniforms.seed,this.seed);
+      gl.uniform3f(this.uniforms.color,this.color[0],this.color[1],this.color[2]);
+      gl.uniform1f(this.uniforms.hasAdhesion,this.adhesionCanvas?1:0);
+      gl.uniform1f(this.uniforms.edgeAdhesion,this.edgeAdhesion);
+      gl.uniform1f(this.uniforms.dripCount,this.dripPoints.length);
+      const p0=this.dripPoints[0]||[0,0],p1=this.dripPoints[1]||[0,0];
+      gl.uniform2f(this.uniforms.drip0,p0[0],p0[1]);
+      gl.uniform2f(this.uniforms.drip1,p1[0],p1[1]);
+      gl.drawArrays(gl.TRIANGLES,0,6);
+    }
+
     start(options={}){if(this.running)return;this.running=true;this.startTime=0;this.onComplete=options.onComplete??null;if(options.seed!=null)this.seed=options.seed;requestAnimationFrame(this._frame);}
     _frame(time){if(!this.running)return;if(!this.startTime)this.startTime=time;const progress=Math.min(1,(time-this.startTime)/this.duration);this.draw(progress);if(progress<1)return requestAnimationFrame(this._frame);this.running=false;const done=this.onComplete;this.onComplete=null;if(typeof done==='function')done();}
     reset(seed=Math.random()*1000){this.running=false;this.startTime=0;this.seed=seed;this.draw(0);}
     stop(){this.running=false;this.startTime=0;}
-    destroy(){this.stop();global.removeEventListener('resize',this._resize);if(this.adhesionTexture)this.gl.deleteTexture(this.adhesionTexture);if(this.buffer)this.gl.deleteBuffer(this.buffer);if(this.program)this.gl.deleteProgram(this.program);this.adhesionCanvas=null;this.canvas.remove();}
+    destroy(){this.stop();global.removeEventListener('resize',this._resize);if(this.adhesionTexture)this.gl.deleteTexture(this.adhesionTexture);if(this.buffer)this.gl.deleteBuffer(this.buffer);if(this.program)this.gl.deleteProgram(this.program);this.adhesionCanvas=null;this.dripPoints=[];this.canvas.remove();}
   }
+
   global.BloodMelt=BloodMelt;
 })(window);
