@@ -27,6 +27,8 @@ body{display:flex;align-items:center;justify-content:center}
     <button id="installAnyway" type="button">INSTALL ANYWAY</button>
   </div>
 </div>
+<script src="volumetric-fog.js"></script>
+<script src="title-bloom.js"></script>
 <script src="blood-melt.js"></script>
 <script>
 const title=document.getElementById('title');
@@ -39,7 +41,14 @@ function fitTitle(){
   title.style.fontSize=`${100*(target/measured)}px`;
 }
 addEventListener('resize',fitTitle);
-document.fonts.ready.then(fitTitle);
+
+document.fonts.ready.then(()=>{
+  fitTitle();
+  const fog=new VolumetricFog({grid:16,zIndex:0});
+  const bloom=new TitleBloom(title,{zIndex:1});
+  fog.start();
+  bloom.start();
+});
 
 const warning=document.getElementById('warning');
 const installAnyway=document.getElementById('installAnyway');
